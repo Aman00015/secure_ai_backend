@@ -1,13 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
 
-
-
+# ✅ Allowed frontend origins (no trailing slash!)
 origins = [
-    "https://secure-ai.netlify.app/",  
+    "https://secure-ai.netlify.app",
+    "http://localhost:3000",  # optional: for local testing
+    "http://localhost:5173",  # optional: for local testing (Vite)
 ]
 
+# ✅ Add CORS middleware BEFORE including routers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -16,26 +19,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Use absolute import instead of relative import
+# ✅ Import routes (after CORS)
 try:
-    from routes import router  # Remove the dot - use absolute import
+    from routes import router
 except ImportError as e:
     print(f"Import error: {e}")
-    # Fallback: create a basic router
     from fastapi import APIRouter
     router = APIRouter()
-    
+
     @router.get("/test")
     def test_route():
         return {"message": "Routes module not found - check imports"}
 
-
-# Add CORS middleware for frontend
-
-
-
-
-app.include_router(router)  # Connect to routes
+app.include_router(router)
 
 @app.get("/")
 def read_root():
