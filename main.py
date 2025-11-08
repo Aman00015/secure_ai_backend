@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+app = FastAPI()
 
 
 
@@ -28,7 +29,6 @@ except ImportError as e:
     def test_route():
         return {"message": "Routes module not found - check imports"}
 
-app = FastAPI()
 
 # Add CORS middleware for frontend
 
