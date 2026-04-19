@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import logging
 import google.generativeai as genai
-from phishing_detector import phishing_detector
 import os
+import tempfile
+from phishing_detector import phishing_detector
+from pe_scanner import pe_scanner
 from subdomain_finder import router as subdomain_router
 
 logger = logging.getLogger(__name__)
@@ -23,18 +25,31 @@ class GenerateFixRequest(BaseModel):
 class PhishingCheckRequest(BaseModel):
     url: str
 
-# Initialize phishing detector
+# ── Load all ML models at startup ───────────────────────────
 @router.on_event("startup")
 async def startup_event():
+    # Phishing detection model
     try:
-        model_path = "phishing_model.pkl"
-        if os.path.exists(model_path):
-            phishing_detector.load_model(model_path)
+        phish_path = "phishing_model.pkl"
+        if os.path.exists(phish_path):
+            phishing_detector.load_model(phish_path)
             logger.info("Phishing detection model loaded successfully")
         else:
-            logger.warning("Phishing model file not found. Phishing detection will not work.")
+            logger.warning("phishing_model.pkl not found — phishing detection unavailable")
     except Exception as e:
         logger.warning(f"Could not load phishing model: {str(e)}")
+
+    # PE malware detection model
+    try:
+        pe_model_path    = "pe_model.pkl"
+        pe_features_path = "pe_features.pkl"
+        if os.path.exists(pe_model_path) and os.path.exists(pe_features_path):
+            pe_scanner.load_model(pe_model_path, pe_features_path)
+            logger.info("PE malware detection model loaded successfully")
+        else:
+            logger.warning("pe_model.pkl or pe_features.pkl not found — malware scanning unavailable")
+    except Exception as e:
+        logger.warning(f"Could not load PE malware model: {str(e)}")
 
 # Health check
 @router.get("/health")
@@ -249,3 +264,78 @@ We encountered an issue generating AI-powered fixes for this vulnerability.
             "model_used": "Error",
             "formatted": True
         }
+
+
+# ─────────────────────────────────────────────────────────────
+# MALWARE DETECTION ENDPOINTS
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/malware/scan")
+async def scan_pe_file(file: UploadFile = File(...)):
+    """
+    Upload a Windows .exe, .dll, or .sys file.
+    The PE header is extracted, 54 features are computed,
+    and the trained Random Forest model returns a verdict.
+
+    Returns:
+        verdict       — "malware" or "benign"
+        confidence    — model certainty 0-100%
+        risk_signals  — plain-English reasons for the verdict
+        features      — all 54 extracted PE header values
+    """
+    # Only accept PE file extensions
+    allowed = ('.exe', '.dll', '.sys', '.scr', '.ocx')
+    if not file.filename.lower().endswith(allowed):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed)}"
+        )
+
+    if pe_scanner.model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="PE malware scanner is not available. Model not loaded."
+        )
+
+    # Write the uploaded file to a temp location, scan, then delete it
+    tmp_path = None
+    try:
+        suffix = os.path.splitext(file.filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content  = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        result = pe_scanner.predict(tmp_path)
+
+        return {
+            "success":  True,
+            "filename": file.filename,
+            "result":   result
+        }
+
+    except ValueError as e:
+        # File was uploaded but is not a valid PE
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"PE scan error for {file.filename}: {e}")
+        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
+    finally:
+        # Always clean up the temp file
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except PermissionError:
+                logger.warning(f"Could not delete temp file {tmp_path} (it may still be open).")
+
+
+@router.get("/malware/health")
+async def malware_health():
+    """Health check — returns whether the PE model is loaded."""
+    return {
+        "status":       "ok" if pe_scanner.model is not None else "unavailable",
+        "model_loaded": pe_scanner.model is not None,
+        "service":      "pe_malware_detection",
+        "description":  "Scans Windows PE files (.exe/.dll) using a Random Forest "
+                        "trained on 138,047 samples with 99.51% accuracy."
+    }

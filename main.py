@@ -4,16 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 # ✅ Allowed frontend origins (no trailing slash!)
-origins = [
-    "https://secure-ai.netlify.app",
-    "http://localhost:3000",  # optional: for local testing
-    "http://localhost:5173",  # optional: for local testing (Vite)
-]
+# origins = [
+#     "https://secure-ai.netlify.app",
+#     "http://localhost:3000",  # optional: for local testing
+#     "http://localhost:5173",  # optional: for local testing (Vite)
+# ]
 
 # ✅ Add CORS middleware BEFORE including routers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
