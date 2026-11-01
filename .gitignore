@@ -1,20 +1,49 @@
-# Python
+# Python Bytecode & Cache
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
 
-# Virtual environments
+# Virtual Environments
 venv/
 .venv/
 env/
 .env/
+ENV/
+env.bak/
+venv.bak/
+Lib/
+lib/
 Scripts/
+pyvenv.cfg
 
-# IDE & system files
+# Temporary Clones & Dynamic Scan Directories
+repo_clone_*/
+venv_*/
+tmp/
+temp/
+
+# Environment Variables & Secrets
+*.env
+.env.*
+!.env.example
+
+# IDE & Operating System Files
 .vscode/
 .idea/
+*.swp
+*.swo
 .DS_Store
+Thumbs.db
+ehthumbs.db
 
-# Environment variables / secrets
-*.env
+# Large Experiments / Generated Models (keep phishing_model.pkl tracked)
+pe_model.pkl
+pe_features.pkl
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
